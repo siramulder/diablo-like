@@ -1,0 +1,23 @@
+body {
+  margin: 0;
+  padding: 24px 16px;
+  background-color: #111014;
+  color: #c4aa78;
+  font-family: Georgia, serif;
+  text-align: center;
+}
+
+h1 {
+  margin: 0 0 24px;
+  font-size: 32px;
+}
+
+canvas {
+  display: block;
+  box-sizing: border-box;
+  margin: 0 auto;
+  /* ย่อเฉพาะขนาดที่แสดง โดยรักษาสัดส่วนของพื้นที่วาด */
+  max-width: 100%;
+  height: auto;
+  border: 1px solid #49414a;
+}
