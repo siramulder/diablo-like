@@ -1,9 +1,9 @@
 # GAME DESIGN DOCUMENT (GDD)
 
-## Project: Dark Fantasy RPG
+## Project: เพชรพระอุเเมว
 
 **Version:** MVP 1.0\
-**Document Version:** 1.1\
+**Document Version:** 1.2\
 **Status:** Step 1 implemented; browser acceptance pending\
 **Platform:** PC / Web Browser\
 **Genre:** 2D Top-Down Action RPG\
@@ -454,7 +454,7 @@ Step 1 — Project Setup & Game Canvas เขียนโค้ดเสร็�
 
 ## 14.2 Implemented
 
-- index.html: ชื่อแท็บและหัวเรื่อง Dark Fantasy RPG; Canvas ภายใน 960 × 540; เชื่อม CSS และ JavaScript แบบ defer
+- index.html: ชื่อแท็บและหัวเรื่อง เพชรพระอุเเมว; Canvas ภายใน 960 × 540; เชื่อม CSS และ JavaScript แบบ defer
 - style.css: หน้าเว็บสีเข้ม หัวเรื่องสีทองหม่น Canvas จัดกลางพร้อมขอบบาง; max-width: 100% และ height: auto สำหรับหน้าต่างขนาดเล็ก
 - game.js: ค่าคงที่ขนาด Canvas และสีพื้นหลัง; ขอ context แบบ 2d; ระบายสี #1b1820 เต็มพื้นที่หนึ่งครั้ง
 - ยังไม่มีตัวละคร การเคลื่อนที่ เมาส์ควบคุม แผนที่ กล้อง การชน การต่อสู้ ศัตรู ช่องเก็บของ หรือไลบรารีภายนอก
@@ -475,7 +475,7 @@ node .\step1-tests.cjs
 
 สคริปต์ใช้เฉพาะโมดูลที่มากับ Node.js อ่านไฟล์เกมโดยไม่เขียนทับ และแสดงผลแต่ละรายการ หากมี Fail จะจบด้วยรหัส 1 รายการเบราว์เซอร์ยังเป็น Not Run และต้องตรวจเองแยกต่างหาก
 
-## 14.4 Automated Test Evidence
+## 14.4 Automated Test Evidence — ก่อนเปลี่ยนชื่อเกม
 
 ผลรันด้วย Node.js v24.19.0 เมื่อ 2026-10-26:
 
@@ -505,6 +505,12 @@ node .\step1-tests.cjs
 
 หยุดที่ Step 1 และรอผู้ใช้ยืนยันก่อนเริ่ม Step 2
 
+## 14.6 เปลี่ยนชื่อเกม — 2026-10-26
+
+เปลี่ยนชื่อจาก Dark Fantasy RPG เป็น เพชรพระอุเเมว ตามตัวสะกดที่ผู้ใช้ระบุ ทั้งชื่อแท็บ (title) และหัวเรื่องเหนือ Canvas (h1) พร้อมปรับ AT-03 ให้ตรวจชื่อใหม่
+
+ตารางในหัวข้อ 14.4 เป็นผลทดสอบก่อนเปลี่ยนชื่อ จึงคงชื่อเดิมและขนาดไฟล์เดิมไว้เป็นประวัติ ผลรันหลังเปลี่ยนชื่อด้วย Node.js v24.19.0: AT-01–AT-09 และ QA-01 ผ่านทั้งหมด โดย AT-03 ตรวจชื่อ เพชรพระอุเเมว ทั้งสองตำแหน่ง; index.html มีขนาด 794 ไบต์ ส่วน BR-01–BR-03 ยังคง Not Run เพราะไม่มีผลตรวจในเบราว์เซอร์จริง
+
 ---
 
-**End of Document — MVP 1.0 GDD (Document Version 1.1)**
+**End of Document — MVP 1.0 GDD (Document Version 1.2)**

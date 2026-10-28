@@ -75,7 +75,7 @@ test('AT-02','Basic HTML structure','Static tag nesting and required elements', 
 }, 'Small structural checker, not a complete HTML standards validator.');
 test('AT-03','Title and heading','Static HTML/CSS', () => {
   const html = cleanHtml();
-  for (const tag of ['title','h1']) assert.equal(html.match(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)</${tag}>`,'i'))?.[1].trim(),'Dark Fantasy RPG');
+  for (const tag of ['title','h1']) assert.equal(html.match(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)</${tag}>`,'i'))?.[1].trim(),'เพชรพระอุเเมว');
   assert(!/<h1\b[^>]*\b(?:hidden|style)\b/i.test(html));
   for (const [selector,r] of Object.entries(cssRules())) {
     assert(['body','h1','canvas'].includes(selector),'Review unsupported selector: '+selector);
