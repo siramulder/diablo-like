@@ -42,17 +42,80 @@ function cssRules() {
   }
   return rules;
 }
-function simulate() {
+// Shared deterministic Canvas/event/frame harness. This is not a browser renderer.
+function simulate(layout = {}) {
   const attrs = canvasAttributes();
-  const calls = [];
-  const context = {fillStyle:'#000000', fillRect(...args) { calls.push({color:this.fillStyle, args}); }};
-  const canvas = {width:Number(attrs.width), height:Number(attrs.height), getContext(type) {
-    assert.equal(type, '2d'); calls.push({context:type}); return context;
-  }};
-  const sandbox = {document:{getElementById(id) { assert.equal(id, attrs.id); return canvas; }}};
-  vm.runInNewContext(read('game.js'), sandbox, {timeout:1000, filename:'game.js'});
-  return {canvas, calls};
+  const calls = [], frames = [], listeners = {}, documentListeners = {};
+  const geometry = {left:40, top:70, width:960, height:540,
+    borderLeft:1, borderRight:1, borderTop:1, borderBottom:1, ...layout};
+  let transform = {x:0, y:0, angle:0};
+  const stack = [];
+  const context = {fillStyle:'#000000', strokeStyle:'#000000', lineWidth:1};
+  for (const method of ['fillRect','beginPath','arc','moveTo','lineTo','closePath','fill','stroke']) {
+    context[method] = (...args) => calls.push({method, args, color:context.fillStyle,
+      strokeColor:context.strokeStyle, lineWidth:context.lineWidth, transform:{...transform}});
+  }
+  context.save = () => {
+    stack.push({transform:{...transform},fillStyle:context.fillStyle,strokeStyle:context.strokeStyle,lineWidth:context.lineWidth});
+  };
+  context.restore = () => {
+    assert(stack.length > 0,'Unbalanced Canvas restore');
+    const saved = stack.pop(); transform = saved.transform;
+    Object.assign(context,{fillStyle:saved.fillStyle,strokeStyle:saved.strokeStyle,lineWidth:saved.lineWidth});
+  };
+  context.translate = (x,y) => { transform.x += x; transform.y += y; };
+  context.rotate = angle => { transform.angle += angle; };
+  const add = (target,type,handler) => (target[type] ||= []).push(handler);
+  const canvas = {width:Number(attrs.width), height:Number(attrs.height),
+    getContext(type) { assert.equal(type,'2d'); calls.push({context:type}); return context; },
+    getBoundingClientRect() { return {left:geometry.left,top:geometry.top,
+      width:geometry.width+geometry.borderLeft+geometry.borderRight,
+      height:geometry.height+geometry.borderTop+geometry.borderBottom}; },
+    addEventListener(type,handler) { add(listeners,type,handler); }
+  };
+  const sandbox = {
+    document:{getElementById(id) { assert.equal(id,attrs.id); return canvas; },
+      addEventListener(type,handler) { add(documentListeners,type,handler); }},
+    getComputedStyle(element) {
+      assert.equal(element,canvas);
+      return {borderLeftWidth:geometry.borderLeft+'px',borderRightWidth:geometry.borderRight+'px',
+        borderTopWidth:geometry.borderTop+'px',borderBottomWidth:geometry.borderBottom+'px'};
+    },
+    requestAnimationFrame(callback) { frames.push(callback); return frames.length; }
+  };
+  const realm = vm.createContext(sandbox);
+  vm.runInContext(read('game.js'),realm,{timeout:1000,filename:'game.js'});
+  function invoke(callback,argument) {
+    sandbox.testCallback = callback; sandbox.testArgument = argument;
+    try { vm.runInContext('testCallback(testArgument)',realm,{timeout:1000}); }
+    finally { delete sandbox.testCallback; delete sandbox.testArgument; }
+  }
+  function dispatch(type,fields = {},outside = false) {
+    const event = {button:0,clientX:0,clientY:0,defaultPrevented:false,
+      preventDefault() { this.defaultPrevented = true; },...fields};
+    for (const callback of (outside ? documentListeners : listeners)[type] || []) invoke(callback,event);
+    return event;
+  }
+  return {canvas,calls,listeners,documentListeners,
+    state() { return JSON.parse(vm.runInContext('JSON.stringify({player,destination})',realm)); },
+    frame(timestamp) {
+      assert.equal(frames.length,1,'Exactly one frame must be scheduled');
+      calls.length = 0; invoke(frames.shift(),timestamp);
+      assert.equal(stack.length,0,'Canvas transform must be restored each frame');
+      return calls;
+    },
+    pendingFrames() { return frames.length; },
+    dispatch,
+    click(x,y,button = 0) {
+      return dispatch('pointerdown',{button,
+        clientX:geometry.left+geometry.borderLeft+x*geometry.width/960,
+        clientY:geometry.top+geometry.borderTop+y*geometry.height/540});
+    },
+    setLayout(changes) { Object.assign(geometry,changes); }
+  };
 }
+
+function runTests() {
 test('AT-01','Required files','Filesystem assertions', () => {
   for (const name of names) { assert(fs.statSync(path.join(root,name)).isFile()); assert(read(name).trim().length > 0); }
   return names.map(n => `${n}: ${fs.statSync(path.join(root,n)).size} bytes`).join('; ');
@@ -100,26 +163,35 @@ test('AT-05','Local CSS/JS references','Resolve paths and check files', () => {
   }
   return 'style.css and game.js resolve locally; script uses defer';
 });
-test('AT-06','2D context and dark fill','Execute game.js using instrumented Canvas', () => {
-  const {calls} = simulate(); assert.equal(calls.length,2); assert.equal(calls[0].context,'2d');
-  assert.deepEqual(calls[1].args,[0,0,960,540]);
-  assert.match(calls[1].color,/^#[0-9a-f]{6}$/i);
-  const rgb = calls[1].color.slice(1).match(/../g).map(v=>parseInt(v,16));
-  assert(rgb.every(v=>v<=64),'Dark background criterion: every RGB channel <= 64');
-  return `getContext('2d'); one full fillRect; ${calls[1].color}, RGB ${rgb.join(',')}`;
-}, 'Checks drawing commands, not actual rendered pixels.');
+test('AT-06','2D context and per-frame dark fill','Execute game.js using instrumented Canvas', () => {
+  const sim = simulate();
+  assert.equal(sim.calls[0].context,'2d');
+  for (const timestamp of [0,16,32]) {
+    const calls = sim.frame(timestamp);
+    assert.equal(calls[0].method,'fillRect','Background must be first draw command');
+    assert.deepEqual(calls[0].args,[0,0,960,540]);
+    assert.equal(calls[0].color,'#1b1820');
+    assert.deepEqual(calls[0].transform,{x:0,y:0,angle:0});
+    const backgrounds = calls.filter(c => c.method === 'fillRect' && c.args[2] === 960 && c.args[3] === 540);
+    assert.equal(backgrounds.length,1,'Exactly one background fill per frame');
+  }
+  return "getContext('2d'); #1b1820 full background before player on 3 frames";
+}, 'Updated for Step 2 animation. Checks commands, not rendered pixels.');
 test('AT-07','JavaScript syntax','Node --check', () => {
   const result = spawnSync(process.execPath,['--check',path.join(root,'game.js')],{encoding:'utf8'});
   if (result.error) throw result.error;
   assert.equal(result.status,0,result.stderr); return 'node --check game.js: exit 0';
 });
-test('AT-08','Step 1 scope','Static screening plus limited runtime environment', () => {
+test('AT-08','Step 2 scope','Static screening plus limited runtime environment', () => {
   const js = read('game.js').replace(/\/\*[\s\S]*?\*\/|\/\/[^\r\n]*/g,'');
-  assert(!/\b(player|movement|camera|collision\w*|combat|enem\w*|inventory|import|require|fetch|XMLHttpRequest|WebSocket|addEventListener|requestAnimationFrame|setInterval|setTimeout)\b/i.test(js),'Out-of-scope identifier or API found');
+  assert(!/\b(camera|collision\w*|combat|enem\w*|inventory|loot|pathfinding|worldMap|obstacles|import|require|fetch|XMLHttpRequest|WebSocket|setInterval|setTimeout)\b/i.test(js),'Out-of-scope identifier or API found');
   assert(!/https?:|@import/i.test(read('style.css')),'External CSS reference found');
   const entries = fs.readdirSync(root); assert(!entries.includes('node_modules')); assert(!entries.includes('package.json'));
   assert.equal((cleanHtml().match(/<script\b/gi)||[]).length,1);
-  simulate(); return 'No prohibited feature/API markers; one local script; initialization runs with only Canvas stub';
+  const sim = simulate();
+  assert.deepEqual(Object.keys(sim.listeners).sort(),['contextmenu','pointerdown']);
+  assert.deepEqual(Object.keys(sim.documentListeners),[]);
+  return 'Only canvas pointerdown/contextmenu handlers; no keyboard, map/combat markers or external libraries';
 }, 'Heuristic source screening; not a proof against arbitrarily disguised code. Reviewed current small source as well.');
 test('AT-09','Responsive configuration','Static CSS and HTML; simulated initialization', () => {
   const rules = cssRules(), r = rules.canvas; assert(r,'Missing canvas rule');
@@ -131,7 +203,7 @@ test('AT-09','Responsive configuration','Static CSS and HTML; simulated initiali
   return 'max-width:100%; height:auto; centered; viewport meta; internal 960x540';
 }, 'CSS configuration only. Resize behavior and rendered content ratio need a browser; border is outside drawing content.');
 for (const [id,name] of [['BR-01','Visible title and rendered canvas pixels'],['BR-02','Desktop/narrow layout, centering and resize aspect ratio'],['BR-03','Browser console and loading errors']]) {
-  results.push({id,name,method:'Real browser',status:'Not Run',evidence:'Browser tool denied local file:// navigation under its security policy.',notes:'No browser result inferred from static or simulated checks.'});
+  results.push({id,name,method:'Real browser',status:'Not Run',evidence:'This Node.js suite does not execute a real browser; earlier file:// browser automation was denied.',notes:'No browser result inferred from static or simulated checks.'});
 }
 test('QA-01','Application remains unchanged','SHA-256 comparison', () => {
   for (const [name,hash] of Object.entries(before)) assert.equal(digest(name),hash);
@@ -139,3 +211,8 @@ test('QA-01','Application remains unchanged','SHA-256 comparison', () => {
 });
 console.log(JSON.stringify({project:root,node:process.version,results},null,2));
 process.exitCode = results.some(r=>r.status==='Fail') ? 1 : 0;
+
+}
+
+module.exports = {simulate};
+if (require.main === module) runTests();
