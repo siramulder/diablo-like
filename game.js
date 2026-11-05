@@ -2,6 +2,8 @@
 const CANVAS_WIDTH = 960;
 const CANVAS_HEIGHT = 540;
 const BACKGROUND_COLOR = "#1b1820";
+const ACCELERATION = 1100; // พิกเซลต่อวินาทีกำลังสอง ใช้ทั้งเร่งและเบรกปกติ
+const TURN_RATE = 1200 * Math.PI / 180; // เรเดียนต่อวินาที
 const MAX_DELTA_TIME = 0.1;
 
 const canvas = document.getElementById("gameCanvas");
@@ -14,10 +16,13 @@ const player = {
   x: 480,
   y: 270,
   radius: 14,
-  speed: 220,
+  maxSpeed: 220,
+  currentSpeed: 0,
+  visualAngle: 0,
   facingAngle: 0
 };
 let destination = null;
+let trip = null;
 let previousTime = null;
 
 function clamp(value, minimum, maximum) {
@@ -54,9 +59,7 @@ function handlePointerDown(event) {
     x: clamp(point.x, player.radius, CANVAS_WIDTH - player.radius),
     y: clamp(point.y, player.radius, CANVAS_HEIGHT - player.radius)
   };
-  if (destination.x === player.x && destination.y === player.y) {
-    destination = null;
-  }
+  planMovement();
 }
 
 canvas.addEventListener("pointerdown", handlePointerDown);
@@ -64,26 +67,82 @@ canvas.addEventListener("contextmenu", function (event) {
   event.preventDefault();
 });
 
-function updateMovement(deltaTime) {
-  if (destination === null || deltaTime <= 0) return;
-
+// เตรียมการเดินหนึ่งครั้งต่อคลิก โดยใช้ความเร็วที่มีอยู่ตอนรับคำสั่ง
+function planMovement() {
   const dx = destination.x - player.x;
   const dy = destination.y - player.y;
   const distance = Math.hypot(dx, dy);
-  const step = player.speed * deltaTime;
-
-  // หันตามทิศที่เดิน และเก็บมุมล่าสุดไว้เมื่อหยุด
-  if (distance > 0) player.facingAngle = Math.atan2(dy, dx);
-
-  // ก้าวสุดท้ายไปถึงพอดี ป้องกันการเดินเลยและสั่นไปมา
-  if (distance <= step) {
-    player.x = destination.x;
-    player.y = destination.y;
+  if (distance === 0) {
     destination = null;
+    trip = null;
+    player.currentSpeed = 0;
     return;
   }
-  player.x += dx / distance * step;
-  player.y += dy / distance * step;
+
+  const startSpeed = player.currentSpeed;
+  const normalBrakeDistance = startSpeed ** 2 / (2 * ACCELERATION);
+  let brakeRate = ACCELERATION;
+  // จาก v² = u² + 2as: เลือกความเร็วสูงสุดที่ยังเหลือทางให้เบรกทัน
+  let peakSpeed = Math.min(player.maxSpeed, Math.sqrt(ACCELERATION * distance + startSpeed ** 2 / 2));
+  if (distance < normalBrakeDistance) {
+    peakSpeed = startSpeed;
+    brakeRate = startSpeed ** 2 / (2 * distance);
+  }
+  const accelTime = (peakSpeed - startSpeed) / ACCELERATION;
+  const accelDistance = (startSpeed + peakSpeed) * accelTime / 2;
+  const brakeDistance = peakSpeed ** 2 / (2 * brakeRate);
+  const cruiseDistance = Math.max(0, distance - accelDistance - brakeDistance);
+  const brakeStart = accelTime + cruiseDistance / peakSpeed;
+
+  player.facingAngle = Math.atan2(dy, dx);
+  trip = {
+    startX: player.x, startY: player.y, unitX: dx / distance, unitY: dy / distance,
+    distance, startSpeed, peakSpeed, accelTime, accelDistance, brakeRate, brakeStart,
+    endTime: brakeStart + peakSpeed / brakeRate, elapsed: 0
+  };
+}
+
+function updateMovement(deltaTime) {
+  if (trip === null) return;
+  trip.elapsed += deltaTime;
+  const t = trip.elapsed;
+  if (t >= trip.endTime - 1e-12) {
+    player.x = destination.x;
+    player.y = destination.y;
+    player.currentSpeed = 0;
+    destination = null;
+    trip = null;
+    return;
+  }
+
+  // ใช้เวลารวมตั้งแต่คลิก จึงข้ามจากช่วงเร่งไปช่วงเบรกกลางเฟรมได้
+  let travelled;
+  if (t < trip.accelTime) {
+    player.currentSpeed = trip.startSpeed + ACCELERATION * t;
+    travelled = (trip.startSpeed + player.currentSpeed) * t / 2;
+  } else if (t < trip.brakeStart) {
+    player.currentSpeed = trip.peakSpeed;
+    travelled = trip.accelDistance + trip.peakSpeed * (t - trip.accelTime);
+  } else {
+    const timeLeft = trip.endTime - t;
+    player.currentSpeed = trip.brakeRate * timeLeft;
+    travelled = trip.distance - player.currentSpeed * timeLeft / 2;
+  }
+  player.x = trip.startX + trip.unitX * travelled;
+  player.y = trip.startY + trip.unitY * travelled;
+}
+
+function updateVisualAngle(deltaTime) {
+  const difference = player.facingAngle - player.visualAngle;
+  let turn = Math.atan2(Math.sin(difference), Math.cos(difference));
+  // กลับตัวครึ่งรอบพอดีให้หมุนตามเข็มนาฬิกาบน Canvas
+  if (Math.abs(Math.abs(turn) - Math.PI) < 1e-12) turn = Math.PI;
+  const maxTurn = TURN_RATE * deltaTime;
+  if (Math.abs(turn) <= maxTurn) {
+    player.visualAngle = player.facingAngle;
+  } else {
+    player.visualAngle += Math.sign(turn) * maxTurn;
+  }
 }
 
 function drawDestination() {
@@ -103,7 +162,7 @@ function drawPlayer() {
   // เลื่อนจุดวาดไปที่ตัวละคร แล้วหมุนเฉพาะรูปของตัวละคร
   context.save();
   context.translate(player.x, player.y);
-  context.rotate(player.facingAngle);
+  context.rotate(player.visualAngle);
 
   context.fillStyle = "#b7c5d1";
   context.strokeStyle = "#e2bb65";
@@ -140,6 +199,7 @@ function gameLoop(timestamp) {
   const deltaTime = clamp(elapsed, 0, MAX_DELTA_TIME);
   previousTime = timestamp;
   updateMovement(deltaTime);
+  updateVisualAngle(deltaTime);
   render();
   requestAnimationFrame(gameLoop);
 }

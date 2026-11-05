@@ -34,23 +34,23 @@ const markers = sim => sim.calls.filter(c => c.method === 'arc' && c.args[2] ===
 
 test('S2-01','Initial warrior and footprint',() => {
   const sim = simulate();
-  assert.deepEqual(sim.state(),{player:{x:480,y:270,radius:14,speed:220,facingAngle:0},destination:null});
+  assert.deepEqual(sim.state(),{player:{x:480,y:270,radius:14,maxSpeed:220,currentSpeed:0,visualAngle:0,facingAngle:0},destination:null});
   const bodies = sim.calls.filter(c=>c.method==='arc');
   assert.equal(bodies.length,1);
   assert.deepEqual(bodies[0].transform,{x:480,y:270,angle:0});
   assert.equal(bodies[0].args[2]+bodies[0].lineWidth/2,14);
   assert(sim.calls.some(c=>c.method==='moveTo' && c.args[0]===12 && c.args[1]===0));
   assert(sim.calls.some(c=>c.method==='fill' && c.color==='#b7c5d1'));
-  return 'One body drawn at (480,270), radius including stroke=14, speed=220, facing right';
+  return 'One body drawn at (480,270), radius including stroke=14, at rest, maximum speed=220, facing right';
 });
 test('S2-02','One left press and release',() => {
   const sim = simulate(); sim.frame(0); sim.click(800,270);
   assert.deepEqual(sim.state().destination,{x:800,y:270});
-  sim.frame(100); near(sim.state().player.x,502);
-  sim.dispatch('pointerup',{button:0}); sim.frame(200); near(sim.state().player.x,524);
-  sim.dispatch('pointerup',{button:0},true); sim.frame(300); near(sim.state().player.x,546);
+  sim.frame(100); near(sim.state().player.x,485.5);
+  sim.dispatch('pointerup',{button:0}); sim.frame(200); near(sim.state().player.x,502);
+  sim.dispatch('pointerup',{button:0},true); sim.frame(300); near(sim.state().player.x,524);
   assert.deepEqual(sim.state().destination,{x:800,y:270});
-  return 'After one click: x=502,524,546 at 0.1,0.2,0.3s; release inside/outside does not stop';
+  return 'After one click: x=485.5,502,524 at 0.1,0.2,0.3s; release inside/outside does not stop';
 });
 test('S2-03','Holding and dragging do not retarget',() => {
   const sim = simulate(); sim.frame(0); sim.click(800,270);
@@ -60,14 +60,14 @@ test('S2-03','Holding and dragging do not retarget',() => {
     sim.dispatch('pointermove',{clientX:2000,clientY:2000,buttons},true);
     assert.deepEqual(sim.state().destination,{x:800,y:270});
   }
-  sim.frame(100); near(sim.state().player.x,502);
+  sim.frame(100); near(sim.state().player.x,485.5);
   return 'Hover/drag inside and outside preserve (800,270); movement continues';
 });
 test('S2-04','New left press replaces active destination',() => {
   const sim = simulate(); sim.frame(0); sim.click(800,270); sim.frame(100);
   sim.click(100,270); assert.deepEqual(sim.state().destination,{x:100,y:270});
-  sim.frame(200); near(sim.state().player.x,480); near(sim.state().player.facingAngle,Math.PI);
-  return 'Retarget from right to left at x=502; next frame x=480 and facing PI';
+  sim.frame(200); near(sim.state().player.x,469); near(sim.state().player.facingAngle,Math.PI);
+  return 'Retarget from right to left at x=485.5; next frame x=469 and facing PI';
 });
 test('S2-05','Other buttons, outside presses and keyboard ignored',() => {
   const sim = simulate(); sim.frame(0); sim.click(800,270);
@@ -75,49 +75,49 @@ test('S2-05','Other buttons, outside presses and keyboard ignored',() => {
   sim.dispatch('pointerdown',{button:0,clientX:100,clientY:100},true);
   for (const key of ['w','a','s','d','ArrowLeft']) sim.dispatch('keydown',{key},true);
   assert.deepEqual(sim.state().destination,{x:800,y:270});
-  sim.frame(100); near(sim.state().player.x,502); near(sim.state().player.y,270);
+  sim.frame(100); near(sim.state().player.x,485.5); near(sim.state().player.y,270);
   assert.equal(sim.dispatch('contextmenu').defaultPrevented,true);
   assert.equal(sim.dispatch('contextmenu',{},true).defaultPrevented,false);
   return 'Right/middle/outside/keyboard do not retarget; context menu suppressed only on Canvas';
 });
-test('S2-06','Constant speed and actual facing at 30/60/120/144 FPS',() => {
+test('S2-06','Acceleration, cruising speed and actual facing at 30/60/120/144 FPS',() => {
   const directions = [[900,270],[60,270],[480,520],[480,20],[800,500]];
   for (const fps of [30,60,120,144]) {
     for (const [x,y] of directions) {
       const sim = simulate(); sim.frame(0); sim.click(x,y);
       for (let frame=1;frame<=fps;frame++) sim.frame(frame*1000/fps);
       const p = sim.state().player;
-      near(Math.hypot(p.x-480,p.y-270),220);
+      near(Math.hypot(p.x-480,p.y-270),198); near(p.currentSpeed,220);
       near(p.facingAngle,Math.atan2(y-270,x-480));
       const directionLength = Math.hypot(x-480,y-270);
-      near(p.x,480+(x-480)/directionLength*220);
-      near(p.y,270+(y-270)/directionLength*220);
+      near(p.x,480+(x-480)/directionLength*198);
+      near(p.y,270+(y-270)/directionLength*198);
     }
   }
-  return '20 runs: 30/60/120/144 FPS, horizontal/vertical/diagonal, all travel 220px in 1s with correct angle';
+  return '20 runs: 30/60/120/144 FPS, horizontal/vertical/diagonal, all travel 198px from rest in 1s with correct angle';
 });
 test('S2-07','Exact arrival and no oscillation',() => {
-  const sim = simulate(); sim.frame(0); sim.click(483,274); sim.frame(100);
-  const arrived = sim.state();
+  const sim = simulate(); sim.frame(0); sim.click(483,274); sim.frame(100); sim.frame(200);
+  const arrived = sim.state(); assert.equal(arrived.player.currentSpeed,0);
   assert.equal(arrived.player.x,483); assert.equal(arrived.player.y,274); assert.equal(arrived.destination,null);
   near(arrived.player.facingAngle,Math.atan2(4,3));
-  for (let frame=2;frame<=20;frame++) { sim.frame(frame*100); assert.deepEqual(sim.state(),arrived); }
-  return '5px destination reached exactly despite 22px step; next 19 frames remain stationary';
+  for (let frame=3;frame<=21;frame++) { sim.frame(frame*100); assert.deepEqual(sim.state(),arrived); }
+  return '5px destination reached exactly with zero final speed; next 19 frames remain stationary';
 });
 test('S2-08','Same-position clicks and tiny distance',() => {
   const sim = simulate(); sim.frame(0); sim.click(480,270); assert.equal(sim.state().destination,null);
-  sim.click(800,270); sim.frame(100); sim.click(502,270); assert.equal(sim.state().destination,null);
-  sim.frame(200); near(sim.state().player.x,502);
-  sim.click(502.0000001,270); const target = sim.state().destination;
+  sim.click(800,270); sim.frame(100); sim.click(485.5,270); assert.equal(sim.state().destination,null);
+  sim.frame(200); near(sim.state().player.x,485.5);
+  sim.click(485.5000001,270); const target = sim.state().destination;
   sim.frame(300); assert.equal(sim.state().player.x,target.x); assert.equal(sim.state().destination,null);
   assert(Number.isFinite(sim.state().player.facingAngle));
   return 'Click current position cancels active movement; 0.0000001px move arrives without NaN';
 });
 test('S2-09','First frame and long frame cap',() => {
   const sim = simulate(); sim.click(900,270); sim.frame(5000); near(sim.state().player.x,480);
-  sim.frame(15000); near(sim.state().player.x,502);
-  sim.frame(15016); near(sim.state().player.x,505.52);
-  return 'First frame=0 movement; 10s gap capped to 22px; following 16ms moves 3.52px';
+  sim.frame(15000); near(sim.state().player.x,485.5);
+  sim.frame(15016); near(sim.state().player.x,487.4008);
+  return 'First frame=0 movement; 10s gap capped to 5.5px from rest; following 16ms moves 1.9008px';
 });
 test('S2-10','All corners clamp and remain inside footprint boundaries',() => {
   const cases = [[0,0,14,14],[959.9,0,946,14],[0,539.9,14,526],[959.9,539.9,946,526]];
@@ -167,7 +167,7 @@ test('S2-13','Marker appears, changes and disappears',() => {
   assert.deepEqual(markers(sim)[0].args.slice(0,2),[800,270]);
   sim.click(483,274); sim.frame(0);
   assert.equal(markers(sim).length,1); assert.deepEqual(markers(sim)[0].args.slice(0,2),[483,274]);
-  sim.frame(100); assert.equal(markers(sim).length,0);
+  sim.frame(100); sim.frame(200); assert.equal(markers(sim).length,0);
   const body = sim.calls.find(c=>c.method==='arc');
   assert.deepEqual(body.transform,{x:483,y:274,angle:Math.atan2(4,3)});
   return 'Drawing commands show exactly one current marker, removed at arrival; body rotated to travel angle';
@@ -176,7 +176,7 @@ test('S2-14','Resize preserves target and internal resolution',() => {
   const sim = simulate(); sim.frame(0); sim.click(800,270); sim.frame(100);
   sim.setLayout({left:150,top:200,width:480,height:270});
   assert.deepEqual(sim.state().destination,{x:800,y:270});
-  sim.frame(200); near(sim.state().player.x,524);
+  sim.frame(200); near(sim.state().player.x,502);
   sim.dispatch('pointerdown',{button:0,clientX:151+100,clientY:201+50});
   assert.deepEqual(sim.state().destination,{x:200,y:100});
   assert.equal(sim.canvas.width,960); assert.equal(sim.canvas.height,540);
@@ -205,7 +205,7 @@ test('S2-17','Visual center maps to internal center',() => {
   ];
   for (const layout of layouts) {
     const sim = simulate(layout); sim.frame(0); sim.click(900,270); sim.frame(100);
-    near(sim.state().player.x,502);
+    near(sim.state().player.x,485.5);
     sim.dispatch('pointerdown',{button:0,
       clientX:layout.left+1+layout.width/2,
       clientY:layout.top+1+layout.height/2});
@@ -227,7 +227,7 @@ test('S2-18','Negative and out-of-range movement requests are safe',() => {
     }
     sim.frame(100);
     inBounds(sim.state().player);
-    near(sim.state().player.x,active ? 502 : 480);
+    near(sim.state().player.x,active ? 485.5 : 480);
     near(sim.state().player.y,270);
   }
   return '12 finite invalid pointer-coordinate requests ignored, both idle and moving; valid movement continues safely';
@@ -247,11 +247,73 @@ test('S2-19','Only a fresh left pointerdown sets a destination',() => {
     sim.frame(100+i*100);
     assert.deepEqual(sim.state().destination,{x:800,y:270});
   }
-  near(sim.state().player.x,590);
+  near(sim.state().player.x,568);
   sim.dispatch('pointerup',{button:0,clientX:100,clientY:100});
   assert.deepEqual(sim.state().destination,{x:800,y:270});
   sim.click(100,100); assert.deepEqual(sim.state().destination,{x:100,y:100});
-  return 'Idle input stays idle; held dragging for 0.5s retains target and moves 110px; only a fresh left pointerdown replaces target';
+  return 'Idle input stays idle; held dragging for 0.5s retains target and moves 88px; only a fresh left pointerdown replaces target';
+});
+test('S2-20','Acceleration, cruise, braking and short triangular trip',() => {
+  const sim = simulate(); sim.frame(0); sim.click(590,270); // 110px, brake from x=568.
+  for (const [ms,x,speed] of [[100,485.5,110],[200,502,220],[300,524,220],
+      [400,546,220],[500,568,220],[600,584.5,110],[700,590,0]]) {
+    sim.frame(ms); near(sim.state().player.x,x); near(sim.state().player.currentSpeed,speed);
+  }
+  assert.equal(sim.state().destination,null);
+  sim.click(601,270); // 11px: peak 110 at the midpoint, then immediately brake.
+  sim.frame(800); near(sim.state().player.x,595.5); near(sim.state().player.currentSpeed,110);
+  sim.frame(850); near(sim.state().player.currentSpeed,55);
+  sim.frame(900); assert.equal(sim.state().player.x,601); assert.equal(sim.state().player.currentSpeed,0);
+  return '110px trip starts and ends at rest, normal ramps are 22px; 11px trip peaks at 110px/s';
+});
+test('S2-21','Close retarget retains speed and brakes harder only on this trip',() => {
+  const sim = simulate(); sim.frame(0); sim.click(900,270); sim.frame(100); sim.frame(200);
+  sim.click(496.5,270); // Reverse at speed 220, stop in 5.5px over 50ms.
+  near(sim.state().player.currentSpeed,220);
+  sim.frame(225); near(sim.state().player.x,497.875); near(sim.state().player.currentSpeed,110);
+  sim.frame(250); near(sim.state().player.x,496.5); assert.equal(sim.state().destination,null);
+  assert.equal(sim.state().player.currentSpeed,0);
+  sim.click(800,270); sim.frame(350); near(sim.state().player.currentSpeed,110);
+  return '5.5px reversal preserves 220px/s, halves speed in 25ms and stops in 50ms; normal acceleration resumes';
+});
+test('S2-22','Shortest visual turn, clockwise tie, retarget and stationary finish',() => {
+  const sim = simulate(); sim.frame(0); sim.click(479.99,270); sim.frame(75);
+  const half = sim.state().player;
+  near(half.visualAngle,Math.PI/2); near(half.facingAngle,Math.PI); near(half.currentSpeed,0);
+  assert.equal(sim.state().destination,null);
+  near(sim.calls.find(c=>c.method==='arc').transform.angle,half.visualAngle);
+  sim.frame(150); near(sim.state().player.visualAngle,Math.PI);
+  const rad = degrees => degrees*Math.PI/180;
+  function aim(degrees) {
+    const p = sim.state().player;
+    sim.click(p.x+100*Math.cos(rad(degrees)),p.y+100*Math.sin(rad(degrees)));
+  }
+  aim(179); sim.frame(160); near(sim.state().player.visualAngle,rad(179));
+  aim(-179); sim.frame(161); near(sim.state().player.visualAngle,rad(180.2));
+  sim.frame(162); near(sim.state().player.visualAngle,rad(-179));
+  aim(-89); sim.frame(182); near(sim.state().player.visualAngle,rad(-155));
+  aim(145); sim.frame(192); near(sim.state().player.visualAngle,rad(-167));
+  return '180-degree turn is clockwise; rotation continues after stopping, crosses +/-180 by 2 degrees and retargets from current image angle';
+});
+test('S2-23','Equal-time samples across frame rates through phase changes',() => {
+  function run(fps) {
+    const sim = simulate(); sim.frame(0); sim.click(410,270);
+    let frame = 1;
+    return [75,191,219,340,410,519,600].map(ms => {
+      while (frame*1000/fps < ms) sim.frame(frame++*1000/fps);
+      sim.frame(ms);
+      const p = sim.state().player;
+      return [p.x,p.y,p.currentSpeed,p.visualAngle];
+    });
+  }
+  const reference = run(30);
+  for (const fps of [60,120,144]) {
+    const samples = run(fps);
+    samples.forEach((row,i)=>row.forEach((value,j)=>near(value,reference[i][j])));
+  }
+  near(reference[0][3],Math.PI/2); near(reference[2][2],220); near(reference[3][2],196);
+  assert(reference[4][2]>0 && reference[4][2]<220); near(reference[6][0],410); near(reference[6][2],0);
+  return '7 equal-time samples cover turning, ramp, cruise, braking and arrival at 30/60/120/144 FPS';
 });
 test('S2-16','Game files not modified by tests',() => {
   assert.deepEqual(files.map(digest),before);
@@ -262,9 +324,9 @@ results.push({id:'S2-BR',name:'Actual browser interaction, rendering, scaling an
 // Acceptance rows summarize executed subtests; do not count these rows twice.
 const groups = [
   ['AT-10','Player Initialization',['S2-01']],
-  ['AT-11','Movement Calculation',['S2-06']],
-  ['AT-12','Destination Replacement & Input Behavior',['S2-02','S2-03','S2-04','S2-05','S2-19']],
-  ['AT-13','Arrival, Stop & Facing',['S2-07','S2-08','S2-09','S2-13','S2-15']],
+  ['AT-11','Movement Calculation',['S2-06','S2-20','S2-23']],
+  ['AT-12','Destination Replacement & Input Behavior',['S2-02','S2-03','S2-04','S2-05','S2-19','S2-21']],
+  ['AT-13','Arrival, Stop & Facing',['S2-07','S2-08','S2-09','S2-13','S2-15','S2-22']],
   ['AT-14','Canvas Boundaries',['S2-10','S2-12','S2-18']],
   ['AT-15','Pointer Coordinate Conversion',['S2-11','S2-14','S2-17']]
 ];
