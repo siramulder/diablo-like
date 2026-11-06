@@ -1,6 +1,10 @@
 // ค่าพื้นฐานของพื้นที่วาดเกม
 const CANVAS_WIDTH = 960;
 const CANVAS_HEIGHT = 540;
+const WORLD_WIDTH = 2000;
+const WORLD_HEIGHT = 2000;
+const viewport = Object.freeze({ x: 520, y: 730 });
+const GRID_SIZE = 50;
 const BACKGROUND_COLOR = "#1b1820";
 const ACCELERATION = 1100; // พิกเซลต่อวินาทีกำลังสอง ใช้ทั้งเร่งและเบรกปกติ
 const TURN_RATE = 1200 * Math.PI / 180; // เรเดียนต่อวินาที
@@ -11,10 +15,10 @@ const context = canvas.getContext("2d");
 canvas.width = CANVAS_WIDTH;
 canvas.height = CANVAS_HEIGHT;
 
-// Step 2 ใช้พิกัดบน Canvas โดยเริ่มตรงกลางและหันขวา
+// ตำแหน่งเก็บเป็นพิกัดโลก เริ่มกลางโลกและหันขวา
 const player = {
-  x: 480,
-  y: 270,
+  x: 1000,
+  y: 1000,
   radius: 14,
   maxSpeed: 220,
   currentSpeed: 0,
@@ -24,6 +28,14 @@ const player = {
 let destination = null;
 let trip = null;
 let previousTime = null;
+
+function worldToScreen(point) {
+  return { x: point.x - viewport.x, y: point.y - viewport.y };
+}
+
+function screenToWorld(point) {
+  return { x: point.x + viewport.x, y: point.y + viewport.y };
+}
 
 function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(value, maximum));
@@ -55,9 +67,14 @@ function handlePointerDown(event) {
   const point = getCanvasPoint(event);
   if (point === null) return;
 
+  setDestination(screenToWorld(point));
+}
+
+// จำกัดจุดหมายในโลกก่อนคำนวณการเดิน
+function setDestination(point) {
   destination = {
-    x: clamp(point.x, player.radius, CANVAS_WIDTH - player.radius),
-    y: clamp(point.y, player.radius, CANVAS_HEIGHT - player.radius)
+    x: clamp(point.x, player.radius, WORLD_WIDTH - player.radius),
+    y: clamp(point.y, player.radius, WORLD_HEIGHT - player.radius)
   };
   planMovement();
 }
@@ -147,21 +164,23 @@ function updateVisualAngle(deltaTime) {
 
 function drawDestination() {
   if (destination === null) return;
+  const point = worldToScreen(destination);
   context.strokeStyle = "#e2bb65";
   context.lineWidth = 2;
   context.beginPath();
-  context.arc(destination.x, destination.y, 8, 0, Math.PI * 2);
-  context.moveTo(destination.x - 5, destination.y);
-  context.lineTo(destination.x + 5, destination.y);
-  context.moveTo(destination.x, destination.y - 5);
-  context.lineTo(destination.x, destination.y + 5);
+  context.arc(point.x, point.y, 8, 0, Math.PI * 2);
+  context.moveTo(point.x - 5, point.y);
+  context.lineTo(point.x + 5, point.y);
+  context.moveTo(point.x, point.y - 5);
+  context.lineTo(point.x, point.y + 5);
   context.stroke();
 }
 
 function drawPlayer() {
   // เลื่อนจุดวาดไปที่ตัวละคร แล้วหมุนเฉพาะรูปของตัวละคร
   context.save();
-  context.translate(player.x, player.y);
+  const point = worldToScreen(player);
+  context.translate(point.x, point.y);
   context.rotate(player.visualAngle);
 
   context.fillStyle = "#b7c5d1";
@@ -186,9 +205,32 @@ function drawPlayer() {
   context.restore();
 }
 
+// เส้นพื้นผูกกับพิกัดโลก วาดเฉพาะส่วนในช่องมองปัจจุบัน
+function drawFloor() {
+  context.strokeStyle = "#302b33";
+  context.lineWidth = 1;
+  context.beginPath();
+  const right = Math.min(WORLD_WIDTH, viewport.x + CANVAS_WIDTH);
+  const bottom = Math.min(WORLD_HEIGHT, viewport.y + CANVAS_HEIGHT);
+  for (let x = Math.ceil(viewport.x / GRID_SIZE) * GRID_SIZE; x <= right; x += GRID_SIZE) {
+    const topPoint = worldToScreen({ x, y: Math.max(0, viewport.y) });
+    const bottomPoint = worldToScreen({ x, y: bottom });
+    context.moveTo(topPoint.x, topPoint.y);
+    context.lineTo(bottomPoint.x, bottomPoint.y);
+  }
+  for (let y = Math.ceil(viewport.y / GRID_SIZE) * GRID_SIZE; y <= bottom; y += GRID_SIZE) {
+    const leftPoint = worldToScreen({ x: Math.max(0, viewport.x), y });
+    const rightPoint = worldToScreen({ x: right, y });
+    context.moveTo(leftPoint.x, leftPoint.y);
+    context.lineTo(rightPoint.x, rightPoint.y);
+  }
+  context.stroke();
+}
+
 function render() {
   context.fillStyle = BACKGROUND_COLOR;
   context.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  drawFloor();
   drawDestination();
   drawPlayer();
 }

@@ -5,7 +5,21 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const {simulate} = require('./step1-tests.cjs');
+const {simulate: simulateWorld} = require('./step1-tests.cjs');
+// Keep screen-relative regression expectations. Raw world coordinates
+// and world boundary clamping are checked independently in step3-tests.cjs.
+function simulate(layout) {
+  const sim = simulateWorld(layout);
+  const worldState = sim.state;
+  sim.state = () => {
+    const state = worldState();
+    for (const point of [state.player, state.destination]) {
+      if (point) { point.x -= 520; point.y -= 730; }
+    }
+    return state;
+  };
+  return sim;
+}
 const root = path.resolve(process.argv[2] || __dirname);
 const results = [];
 const digest = name => crypto.createHash('sha256').update(fs.readFileSync(path.join(root,name))).digest('hex');
@@ -19,8 +33,8 @@ function near(actual,expected,tolerance = 1e-8) {
   assert(Math.abs(actual-expected) <= tolerance,`Expected ${expected}, got ${actual}`);
 }
 function inBounds(player) {
-  assert(player.x >= 14 && player.x <= 946,`x out of bounds: ${player.x}`);
-  assert(player.y >= 14 && player.y <= 526,`y out of bounds: ${player.y}`);
+  assert(player.x >= -506 && player.x <= 1466,`x out of bounds: ${player.x}`);
+  assert(player.y >= -716 && player.y <= 1256,`y out of bounds: ${player.y}`);
 }
 function advanceToArrival(sim,start = 0) {
   for (let i=1;i<=600;i++) {
@@ -119,8 +133,8 @@ test('S2-09','First frame and long frame cap',() => {
   sim.frame(15016); near(sim.state().player.x,487.4008);
   return 'First frame=0 movement; 10s gap capped to 5.5px from rest; following 16ms moves 1.9008px';
 });
-test('S2-10','All corners clamp and remain inside footprint boundaries',() => {
-  const cases = [[0,0,14,14],[959.9,0,946,14],[0,539.9,14,526],[959.9,539.9,946,526]];
+test('S2-10','Visible corners are reachable within world boundaries',() => {
+  const cases = [[0,0,0,0],[959.5,0,959.5,0],[0,539.5,0,539.5],[959.5,539.5,959.5,539.5]];
   for (const [x,y,tx,ty] of cases) {
     const sim = simulate(); sim.frame(0); sim.click(x,y);
     assert.deepEqual(sim.state().destination,{x:tx,y:ty});
@@ -129,7 +143,7 @@ test('S2-10','All corners clamp and remain inside footprint boundaries',() => {
     assert.equal(sim.state().player.x,tx); assert.equal(sim.state().player.y,ty);
     assert.equal(sim.state().destination,null);
   }
-  return 'All 4 corners arrive at x=14/946,y=14/526; every intermediate frame stays in bounds';
+  return 'All 4 visible corners reached without old canvas clamp; every frame stays in world bounds';
 });
 test('S2-11','Scaled coordinates include borders and page offsets',() => {
   const layouts = [
@@ -327,7 +341,7 @@ const groups = [
   ['AT-11','Movement Calculation',['S2-06','S2-20','S2-23']],
   ['AT-12','Destination Replacement & Input Behavior',['S2-02','S2-03','S2-04','S2-05','S2-19','S2-21']],
   ['AT-13','Arrival, Stop & Facing',['S2-07','S2-08','S2-09','S2-13','S2-15','S2-22']],
-  ['AT-14','Canvas Boundaries',['S2-10','S2-12','S2-18']],
+  ['AT-14','World bounds and canvas input',['S2-10','S2-12','S2-18']],
   ['AT-15','Pointer Coordinate Conversion',['S2-11','S2-14','S2-17']]
 ];
 const acceptance = groups.map(([id,name,ids]) => {

@@ -97,6 +97,7 @@ function simulate(layout = {}) {
     return event;
   }
   return {canvas,calls,listeners,documentListeners,
+    evaluate(code) { return JSON.parse(vm.runInContext("JSON.stringify(" + code + ")",realm)); },
     state() { return JSON.parse(vm.runInContext('JSON.stringify({player,destination})',realm)); },
     frame(timestamp) {
       assert.equal(frames.length,1,'Exactly one frame must be scheduled');
@@ -182,7 +183,7 @@ test('AT-07','JavaScript syntax','Node --check', () => {
   if (result.error) throw result.error;
   assert.equal(result.status,0,result.stderr); return 'node --check game.js: exit 0';
 });
-test('AT-08','Step 2 scope','Static screening plus limited runtime environment', () => {
+test('AT-08','Step 3.1 scope','Static screening plus limited runtime environment', () => {
   const js = read('game.js').replace(/\/\*[\s\S]*?\*\/|\/\/[^\r\n]*/g,'');
   assert(!/\b(camera|collision\w*|combat|enem\w*|inventory|loot|pathfinding|worldMap|obstacles|import|require|fetch|XMLHttpRequest|WebSocket|setInterval|setTimeout)\b/i.test(js),'Out-of-scope identifier or API found');
   assert(!/https?:|@import/i.test(read('style.css')),'External CSS reference found');
@@ -191,7 +192,7 @@ test('AT-08','Step 2 scope','Static screening plus limited runtime environment',
   const sim = simulate();
   assert.deepEqual(Object.keys(sim.listeners).sort(),['contextmenu','pointerdown']);
   assert.deepEqual(Object.keys(sim.documentListeners),[]);
-  return 'Only canvas pointerdown/contextmenu handlers; no keyboard, map/combat markers or external libraries';
+  return 'Only canvas pointerdown/contextmenu handlers; no keyboard, combat markers or external libraries';
 }, 'Heuristic source screening; not a proof against arbitrarily disguised code. Reviewed current small source as well.');
 test('AT-09','Responsive configuration','Static CSS and HTML; simulated initialization', () => {
   const rules = cssRules(), r = rules.canvas; assert(r,'Missing canvas rule');
