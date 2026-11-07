@@ -183,9 +183,9 @@ test('AT-07','JavaScript syntax','Node --check', () => {
   if (result.error) throw result.error;
   assert.equal(result.status,0,result.stderr); return 'node --check game.js: exit 0';
 });
-test('AT-08','Step 3.1 scope','Static screening plus limited runtime environment', () => {
+test('AT-08','Step 3.2 scope','Static screening plus limited runtime environment', () => {
   const js = read('game.js').replace(/\/\*[\s\S]*?\*\/|\/\/[^\r\n]*/g,'');
-  assert(!/\b(camera|collision\w*|combat|enem\w*|inventory|loot|pathfinding|worldMap|obstacles|import|require|fetch|XMLHttpRequest|WebSocket|setInterval|setTimeout)\b/i.test(js),'Out-of-scope identifier or API found');
+  assert(!/\b(collision\w*|combat|enem\w*|inventory|loot|pathfinding|worldMap|obstacles|import|require|fetch|XMLHttpRequest|WebSocket|setInterval|setTimeout)\b/i.test(js),'Out-of-scope identifier or API found');
   assert(!/https?:|@import/i.test(read('style.css')),'External CSS reference found');
   const entries = fs.readdirSync(root); assert(!entries.includes('node_modules')); assert(!entries.includes('package.json'));
   assert.equal((cleanHtml().match(/<script\b/gi)||[]).length,1);

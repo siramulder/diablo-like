@@ -3,7 +3,9 @@ const CANVAS_WIDTH = 960;
 const CANVAS_HEIGHT = 540;
 const WORLD_WIDTH = 2000;
 const WORLD_HEIGHT = 2000;
-const viewport = Object.freeze({ x: 520, y: 730 });
+const camera = { x: 520, y: 730 };
+const CAMERA_FOLLOW_STRENGTH = 8; // ต่อวินาที ยิ่งมากยิ่งตามเร็ว
+const CAMERA_SETTLE_DISTANCE = 0.00001;
 const GRID_SIZE = 50;
 const BACKGROUND_COLOR = "#1b1820";
 const ACCELERATION = 1100; // พิกเซลต่อวินาทีกำลังสอง ใช้ทั้งเร่งและเบรกปกติ
@@ -30,11 +32,11 @@ let trip = null;
 let previousTime = null;
 
 function worldToScreen(point) {
-  return { x: point.x - viewport.x, y: point.y - viewport.y };
+  return { x: point.x - camera.x, y: point.y - camera.y };
 }
 
 function screenToWorld(point) {
-  return { x: point.x + viewport.x, y: point.y + viewport.y };
+  return { x: point.x + camera.x, y: point.y + camera.y };
 }
 
 function clamp(value, minimum, maximum) {
@@ -162,6 +164,34 @@ function updateVisualAngle(deltaTime) {
   }
 }
 
+function getCameraTarget() {
+  return {
+    x: clamp(player.x - CANVAS_WIDTH / 2, 0, WORLD_WIDTH - CANVAS_WIDTH),
+    y: clamp(player.y - CANVAS_HEIGHT / 2, 0, WORLD_HEIGHT - CANVAS_HEIGHT)
+  };
+}
+
+// ค่อย ๆ ตามเป้าหมายที่เคลื่อนจากต้นเฟรมถึงท้ายเฟรม
+// exponential ใช้เวลาจริง ส่วน movingWeight ลดความต่างเมื่อ FPS เปลี่ยน
+function followCameraAxis(current, startTarget, endTarget, deltaTime, maximum) {
+  const amount = CAMERA_FOLLOW_STRENGTH * deltaTime;
+  const blend = -Math.expm1(-amount);
+  const movingWeight = amount < 0.0001
+    ? amount / 2 - amount * amount / 6
+    : 1 - blend / amount;
+  const next = current + (startTarget - current) * blend
+    + (endTarget - startTarget) * movingWeight;
+  if (Math.abs(endTarget - next) < CAMERA_SETTLE_DISTANCE) return endTarget;
+  return clamp(next, 0, maximum);
+}
+
+function updateCamera(deltaTime, startTarget) {
+  if (deltaTime <= 0) return;
+  const target = getCameraTarget();
+  camera.x = followCameraAxis(camera.x, startTarget.x, target.x, deltaTime, WORLD_WIDTH - CANVAS_WIDTH);
+  camera.y = followCameraAxis(camera.y, startTarget.y, target.y, deltaTime, WORLD_HEIGHT - CANVAS_HEIGHT);
+}
+
 function drawDestination() {
   if (destination === null) return;
   const point = worldToScreen(destination);
@@ -210,16 +240,16 @@ function drawFloor() {
   context.strokeStyle = "#302b33";
   context.lineWidth = 1;
   context.beginPath();
-  const right = Math.min(WORLD_WIDTH, viewport.x + CANVAS_WIDTH);
-  const bottom = Math.min(WORLD_HEIGHT, viewport.y + CANVAS_HEIGHT);
-  for (let x = Math.ceil(viewport.x / GRID_SIZE) * GRID_SIZE; x <= right; x += GRID_SIZE) {
-    const topPoint = worldToScreen({ x, y: Math.max(0, viewport.y) });
+  const right = Math.min(WORLD_WIDTH, camera.x + CANVAS_WIDTH);
+  const bottom = Math.min(WORLD_HEIGHT, camera.y + CANVAS_HEIGHT);
+  for (let x = Math.ceil(camera.x / GRID_SIZE) * GRID_SIZE; x <= right; x += GRID_SIZE) {
+    const topPoint = worldToScreen({ x, y: Math.max(0, camera.y) });
     const bottomPoint = worldToScreen({ x, y: bottom });
     context.moveTo(topPoint.x, topPoint.y);
     context.lineTo(bottomPoint.x, bottomPoint.y);
   }
-  for (let y = Math.ceil(viewport.y / GRID_SIZE) * GRID_SIZE; y <= bottom; y += GRID_SIZE) {
-    const leftPoint = worldToScreen({ x: Math.max(0, viewport.x), y });
+  for (let y = Math.ceil(camera.y / GRID_SIZE) * GRID_SIZE; y <= bottom; y += GRID_SIZE) {
+    const leftPoint = worldToScreen({ x: Math.max(0, camera.x), y });
     const rightPoint = worldToScreen({ x: right, y });
     context.moveTo(leftPoint.x, leftPoint.y);
     context.lineTo(rightPoint.x, rightPoint.y);
@@ -240,8 +270,10 @@ function gameLoop(timestamp) {
   const elapsed = previousTime === null ? 0 : (timestamp - previousTime) / 1000;
   const deltaTime = clamp(elapsed, 0, MAX_DELTA_TIME);
   previousTime = timestamp;
+  const startCameraTarget = getCameraTarget();
   updateMovement(deltaTime);
   updateVisualAngle(deltaTime);
+  updateCamera(deltaTime, startCameraTarget);
   render();
   requestAnimationFrame(gameLoop);
 }

@@ -23,15 +23,19 @@ test('AT-25','World and player initialization',()=>{
   assert.deepEqual([sim.canvas.width,sim.canvas.height],[960,540]);
   return 'World 2000x2000, canvas 960x540, player (1000,1000), radius14';
 });
-test('AT-26','Fixed viewport and conversions',()=>{
+test('AT-26','Initial camera and conversions after following',()=>{
   const sim=simulate();
-  assert.deepEqual(sim.evaluate('viewport'),{x:520,y:730});
+  assert.deepEqual(sim.evaluate('camera'),{x:520,y:730});
   assert.deepEqual(sim.evaluate('worldToScreen(player)'),{x:480,y:270});
   for(const p of [{x:0,y:0},{x:1000,y:1000},{x:2000,y:2000},{x:17.25,y:1990.5}])
     assert.deepEqual(sim.evaluate('screenToWorld(worldToScreen('+JSON.stringify(p)+'))'),p);
   sim.frame(0); sim.click(900,500); arrive(sim);
-  assert.deepEqual(sim.evaluate('viewport'),{x:520,y:730});
-  return 'Four round trips, initial screen center, offset fixed after movement';
+  const c=sim.evaluate('camera');
+  assert(c.x>520 && c.y>730);
+  const p=sim.state().player;
+  const screen=sim.evaluate('worldToScreen(player)');
+  near(screen.x+c.x,p.x); near(screen.y+c.y,p.y);
+  return 'Four round trips, initial screen center, and conversions after camera follows';
 });
 test('AT-27','Scaled pointer to world and marker',()=>{
   for(const layout of [{width:960,height:540},{left:123.5,top:45.25,width:480,height:270,borderLeft:3,borderRight:2,borderTop:4,borderBottom:5}]) {
@@ -71,7 +75,8 @@ test('AT-30','Movement and input in world coordinates',()=>{
   const sim=simulate(); sim.frame(0); sim.click(900,270);
   sim.frame(100); near(sim.state().player.x,1005.5); near(sim.state().player.currentSpeed,110);
   sim.frame(200); near(sim.state().player.x,1022); near(sim.state().player.currentSpeed,220);
-  sim.click(496.5,270); near(sim.state().player.currentSpeed,220);
+  const camera=sim.evaluate('camera');
+  sim.click(1016.5-camera.x,1000-camera.y); near(sim.state().player.currentSpeed,220);
   sim.dispatch('pointermove',{buttons:1,clientX:500,clientY:500}); sim.dispatch('pointerup'); sim.click(100,100,2);
   assert.deepEqual(sim.state().destination,{x:1016.5,y:1000});
   sim.frame(225); near(sim.state().player.currentSpeed,110);
@@ -93,15 +98,19 @@ test('AT-31','Equal-time samples at four frame rates',()=>{
   near(reference[6][0],930); near(reference[6][1],1000); near(reference[6][2],0);
   return 'Seven equal-time samples at 30/60/120/144 FPS agree within 1e-8, including arrival';
 });
-test('AT-32','Offscreen travel with fixed viewport',()=>{
+test('AT-32','Travel beyond initial view with following camera',()=>{
   const sim=simulate(); sim.frame(0);
   sim.evaluate('(setDestination({x:1986,y:1000}),true)'); arrive(sim);
-  assert.deepEqual(sim.evaluate('worldToScreen(player)'),{x:1466,y:270});
+  const camera=sim.evaluate('camera');
+  assert(camera.x>1000 && camera.x<=1040);
+  const screen=sim.evaluate('worldToScreen(player)');
+  near(screen.x,1986-camera.x); near(screen.y,270);
+  assert(screen.x<960);
   const body=sim.calls.find(c=>c.method==='arc' && c.args[2]===13);
-  assert.equal(body.transform.x,1466); assert.equal(sim.pendingFrames(),1);
-  assert.deepEqual(sim.evaluate('viewport'),{x:520,y:730});
+  near(body.transform.x,screen.x); assert.equal(sim.pendingFrames(),1);
+  assert.equal(camera.y,730);
   assert.equal(sim.state().destination,null);
-  return 'Direct world command arrives offscreen at world x1986 / screen x1466, fixed view and one RAF';
+  return 'World x1986 is reached beyond original view; camera follows within bounds, player stays visible, one RAF';
 });
 results.push({id:'S3-BR',name:'Actual browser rendering, resize and console',status:'Not Run',evidence:'Node VM checks only; browser verification pending.'});
 console.log(JSON.stringify({results},null,2));

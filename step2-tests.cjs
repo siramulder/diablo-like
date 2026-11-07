@@ -10,6 +10,9 @@ const {simulate: simulateWorld} = require('./step1-tests.cjs');
 // and world boundary clamping are checked independently in step3-tests.cjs.
 function simulate(layout) {
   const sim = simulateWorld(layout);
+  // Isolate the accepted movement regression suite from camera motion.
+  // Integration with the real moving camera is covered by AT-30 and AT-33–AT-40.
+  sim.evaluate('(updateCamera = () => {}, true)');
   const worldState = sim.state;
   sim.state = () => {
     const state = worldState();
