@@ -45,22 +45,29 @@ function clamp(value, minimum, maximum) {
 
 // แปลงตำแหน่งเมาส์เป็นพิกัดเกม โดยไม่นับขอบเส้นของ Canvas
 function getCanvasPoint(event) {
+  // รับเฉพาะตัวเลขที่มีค่าจำกัด ก่อนนำไปคำนวณพิกัด
+  if (!Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return null;
   const rect = canvas.getBoundingClientRect();
   const style = getComputedStyle(canvas);
   const leftBorder = parseFloat(style.borderLeftWidth);
   const rightBorder = parseFloat(style.borderRightWidth);
   const topBorder = parseFloat(style.borderTopWidth);
   const bottomBorder = parseFloat(style.borderBottomWidth);
+  const borders = [leftBorder, rightBorder, topBorder, bottomBorder];
+  if (!borders.every(value => Number.isFinite(value) && value >= 0)) return null;
+  if (![rect.left, rect.top, rect.width, rect.height].every(Number.isFinite)) return null;
+
   const width = rect.width - leftBorder - rightBorder;
   const height = rect.height - topBorder - bottomBorder;
   const x = event.clientX - rect.left - leftBorder;
   const y = event.clientY - rect.top - topBorder;
 
   // ไม่รับการกดบนเส้นขอบหรือภายนอกพื้นที่วาด
-  if (width <= 0 || height <= 0 || x < 0 || y < 0 || x >= width || y >= height) {
+  if (![width, height, x, y].every(Number.isFinite) ||
+      width <= 0 || height <= 0 || x < 0 || y < 0 || x >= width || y >= height) {
     return null;
   }
-  return { x: x * CANVAS_WIDTH / width, y: y * CANVAS_HEIGHT / height };
+  return { x: (x / width) * CANVAS_WIDTH, y: (y / height) * CANVAS_HEIGHT };
 }
 
 // รับคำสั่งเฉพาะจังหวะกดซ้ายครั้งใหม่ ไม่ติดตามการลากหรือการปล่อย
@@ -74,6 +81,8 @@ function handlePointerDown(event) {
 
 // จำกัดจุดหมายในโลกก่อนคำนวณการเดิน
 function setDestination(point) {
+  // ข้อมูลผิดรูปต้องไม่เขียนทับจุดหมายและเส้นทางที่กำลังเดิน
+  if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return;
   destination = {
     x: clamp(point.x, player.radius, WORLD_WIDTH - player.radius),
     y: clamp(point.y, player.radius, WORLD_HEIGHT - player.radius)
@@ -257,10 +266,44 @@ function drawFloor() {
   context.stroke();
 }
 
+// แถบหินอยู่ในพิกัดโลก เส้นทองอยู่ด้านที่หันเข้าหาพื้นเดิน
+function drawEdgeStrip(x, y, width, height, vertical, trimOffset, touched) {
+  const point = worldToScreen({ x, y });
+  context.fillStyle = "#45404a";
+  context.fillRect(point.x, point.y, width, height);
+
+  // รอยต่อทุก 50 พิกเซลช่วยให้เห็นแถบเป็นก้อนหิน
+  context.fillStyle = "#29252e";
+  const start = vertical ? camera.y : camera.x;
+  const end = Math.min(vertical ? WORLD_HEIGHT : WORLD_WIDTH,
+    start + (vertical ? CANVAS_HEIGHT : CANVAS_WIDTH));
+  for (let joint = Math.ceil(start / GRID_SIZE) * GRID_SIZE; joint < end; joint += GRID_SIZE) {
+    if (vertical) context.fillRect(point.x, joint - camera.y, width, 2);
+    else context.fillRect(joint - camera.x, point.y, 2, height);
+  }
+
+  context.fillStyle = touched ? "#ffdc72" : "#99815a";
+  if (vertical) context.fillRect(point.x + trimOffset, point.y, 2, height);
+  else context.fillRect(point.x, point.y + trimOffset, width, 2);
+}
+
+function drawWorldEdges() {
+  const size = 12;
+  if (camera.x < size)
+    drawEdgeStrip(0, 0, size, WORLD_HEIGHT, true, size - 2, player.x <= player.radius);
+  if (camera.x + CANVAS_WIDTH > WORLD_WIDTH - size)
+    drawEdgeStrip(WORLD_WIDTH - size, 0, size, WORLD_HEIGHT, true, 0, player.x >= WORLD_WIDTH - player.radius);
+  if (camera.y < size)
+    drawEdgeStrip(0, 0, WORLD_WIDTH, size, false, size - 2, player.y <= player.radius);
+  if (camera.y + CANVAS_HEIGHT > WORLD_HEIGHT - size)
+    drawEdgeStrip(0, WORLD_HEIGHT - size, WORLD_WIDTH, size, false, 0, player.y >= WORLD_HEIGHT - player.radius);
+}
+
 function render() {
   context.fillStyle = BACKGROUND_COLOR;
   context.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   drawFloor();
+  drawWorldEdges();
   drawDestination();
   drawPlayer();
 }
