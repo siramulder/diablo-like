@@ -109,7 +109,33 @@ test('AT-45','Invalid canvas geometry preserves active trip',()=>{
   sim.setLayout({left:40,top:70,width:480,height:270,borderLeft:1,borderRight:1,borderTop:1,borderBottom:1});
   sim.click(100,100);assert.notDeepEqual(sim.state().destination,before.destination);
   sim.frame(325);healthy(sim);
-  return '11 zero/negative/non-finite layout cases rejected without altering trip; valid resized layout recovers';
+  // Override the computed style only. Real pointer handling, movement and camera still run.
+  const probe = moving(), control = moving();
+  probe.evaluate('(globalThis.originalStyle = getComputedStyle, true)');
+  for (const side of ['Left','Right','Top','Bottom']) {
+    const key = 'border'+side+'Width';
+    for (const literal of ['"2oops"','"2pxjunk"','"-2px"','"NaNpx"','"Infinitypx"',
+      '"1e999px"','"2"','"2em"','NaN','Infinity','undefined','null','2','{}']) {
+      probe.evaluate('(getComputedStyle = el => ({...originalStyle(el), '+key+': '+literal+'}), true)');
+      probe.click(100,100);
+      assert.deepEqual(snapshot(probe),snapshot(control),key+' accepted '+literal);
+    }
+    probe.evaluate('(getComputedStyle = el => {const style=originalStyle(el); delete style.'+key+'; return style}, true)');
+    probe.click(100,100);
+    assert.deepEqual(snapshot(probe),snapshot(control),key+' missing');
+  }
+  for (const time of [325,400,500]) {
+    probe.frame(time); control.frame(time);
+    assert.deepEqual(snapshot(probe),snapshot(control)); healthy(probe);
+  }
+  probe.evaluate('(getComputedStyle = originalStyle, true)');
+  for (const width of [0,2,2.5]) {
+    probe.setLayout({borderLeft:width,borderRight:width,borderTop:width,borderBottom:width});
+    probe.dispatch('pointerdown',{button:0,clientX:140+width,clientY:220+width});
+    const c=probe.evaluate('camera');
+    near(probe.state().destination.x,c.x+100); near(probe.state().destination.y,c.y+150);
+  }
+  return '11 geometry cases, 60 invalid border requests, 3 control frames and 3 valid pixel widths passed';
 });
 test('AT-46','Rapid valid/invalid retargets preserve speed and shortest turn',()=>{
   const sim=moving(); const speed=sim.state().player.currentSpeed;

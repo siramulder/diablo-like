@@ -43,16 +43,22 @@ function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(value, maximum));
 }
 
+// ตรวจทั้งข้อความก่อนแปลงความกว้างขอบจาก CSS เป็นพิกเซล
+function readBorderPixels(value) {
+  if (typeof value !== "string" || !/^\+?(?:\d+|\d*\.\d+)(?:[eE][+-]?\d+)?px$/.test(value)) return NaN;
+  return Number(value.slice(0, -2));
+}
+
 // แปลงตำแหน่งเมาส์เป็นพิกัดเกม โดยไม่นับขอบเส้นของ Canvas
 function getCanvasPoint(event) {
   // รับเฉพาะตัวเลขที่มีค่าจำกัด ก่อนนำไปคำนวณพิกัด
   if (!Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return null;
   const rect = canvas.getBoundingClientRect();
   const style = getComputedStyle(canvas);
-  const leftBorder = parseFloat(style.borderLeftWidth);
-  const rightBorder = parseFloat(style.borderRightWidth);
-  const topBorder = parseFloat(style.borderTopWidth);
-  const bottomBorder = parseFloat(style.borderBottomWidth);
+  const leftBorder = readBorderPixels(style.borderLeftWidth);
+  const rightBorder = readBorderPixels(style.borderRightWidth);
+  const topBorder = readBorderPixels(style.borderTopWidth);
+  const bottomBorder = readBorderPixels(style.borderBottomWidth);
   const borders = [leftBorder, rightBorder, topBorder, bottomBorder];
   if (!borders.every(value => Number.isFinite(value) && value >= 0)) return null;
   if (![rect.left, rect.top, rect.width, rect.height].every(Number.isFinite)) return null;
