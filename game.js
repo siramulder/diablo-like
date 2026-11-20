@@ -12,6 +12,18 @@ const ACCELERATION = 1100; // พิกเซลต่อวินาทีก�
 const TURN_RATE = 1200 * Math.PI / 180; // เรเดียนต่อวินาที
 const MAX_DELTA_TIME = 0.1;
 
+// ตำแหน่งและขนาดรูปกำแพงกับเสา ใช้พิกัดโลก
+const obstacles = [
+  { id: "corridor-left", type: "wall", x: 700, y: 250, width: 80, height: 450 },
+  { id: "corridor-right", type: "wall", x: 1220, y: 250, width: 80, height: 450 },
+  { id: "lower-left", type: "wall", x: 400, y: 1300, width: 450, height: 80 },
+  { id: "lower-right", type: "wall", x: 1150, y: 1300, width: 450, height: 80 },
+  { id: "pillar-nw", type: "pillar", x: 400, y: 500, width: 80, height: 80 },
+  { id: "pillar-sw", type: "pillar", x: 400, y: 900, width: 80, height: 80 },
+  { id: "pillar-ne", type: "pillar", x: 1520, y: 500, width: 80, height: 80 },
+  { id: "pillar-se", type: "pillar", x: 1520, y: 900, width: 80, height: 80 }
+];
+
 const canvas = document.getElementById("gameCanvas");
 const context = canvas.getContext("2d");
 canvas.width = CANVAS_WIDTH;
@@ -305,11 +317,25 @@ function drawWorldEdges() {
     drawEdgeStrip(0, WORLD_HEIGHT - size, WORLD_WIDTH, size, false, 0, player.y >= WORLD_HEIGHT - player.radius);
 }
 
+function drawObstacles() {
+  for (const obstacle of obstacles) {
+    const point = worldToScreen(obstacle);
+    context.fillStyle = obstacle.type === "wall" ? "#514957" : "#6b626f";
+    context.fillRect(point.x, point.y, obstacle.width, obstacle.height);
+
+    // ขอบสว่างด้านบนและซ้ายอยู่ภายในรูปทั้งหมด
+    context.fillStyle = "#918796";
+    context.fillRect(point.x, point.y, obstacle.width, 3);
+    context.fillRect(point.x, point.y, 3, obstacle.height);
+  }
+}
+
 function render() {
   context.fillStyle = BACKGROUND_COLOR;
   context.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   drawFloor();
   drawWorldEdges();
+  drawObstacles();
   drawDestination();
   drawPlayer();
 }

@@ -3,8 +3,8 @@
 ## Project: เพชรพระอุเเมว
 
 **Version:** MVP 1.0\
-**Document Version:** 1.18\
-**Status:** MVP 1.0 Step 3 Accepted / Closed; Step 4.1 specification proposed\
+**Document Version:** 1.20\
+**Status:** MVP 1.0 Step 3 Accepted / Closed; Step 4.1 implemented, browser acceptance pending\
 **Platform:** PC / Web Browser\
 **Genre:** 2D Top-Down Action RPG\
 **Inspiration:** Diablo Series
@@ -1224,4 +1224,77 @@ Step 3.4 และการทำงานร่วมกันของระ�
 
 พร้อมนำข้อกำหนดนี้ไปพัฒนา Step 4.1 เมื่อผู้ใช้สั่งเริ่ม การตรวจรับขั้นนั้นต้องมีผลอัตโนมัติและผลตรวจด้วยตาของขั้นนั้นครบ
 
-**End of Document — MVP 1.0 GDD (Document Version 1.18)**
+## 22.6 ผลพัฒนา Step 4.1 — 2026-11-18
+
+เพิ่ม obstacles จำนวนแปดรายการและ drawObstacles() ใน game.js ตามผังหัวข้อ 22.2 วาดรูปและขอบสว่างด้านในหลังขอบโลก ก่อนจุดหมายและนักรบ นักรบสามารถเดินผ่านภาพกำแพงและเสาได้ตามขอบเขต Step 4.1
+
+เพิ่ม obstacle-tests.cjs สำหรับ AT-57–AT-64 โดยรัน game.js จริงใน Node VM ปรับ AT-08 ใน step1-tests.cjs ให้ยอมรับชื่อ obstacles และใช้ชื่อขอบเขต Step 4.1 ข้อห้ามระบบชนและระบบอื่นที่อยู่นอกขั้นนี้ยังถูกตรวจอยู่
+
+AT-59 ตรวจกริดห่าง 10 พิกเซล โดยเผื่อขอบรูป 19 พิกเซล (รัศมี 14 และครึ่งระยะกริด 5) เพื่อให้ช่วงเชื่อมระหว่างจุดตรวจมีพื้นที่เพียงพอ พบเส้นทางเชื่อมถึงทั้งแปดจุดที่กำหนด วิธีค้นพื้นที่ใช้เฉพาะชุดทดสอบข้อมูล
+
+### ผลรันจริง
+
+| คำสั่ง | Pass | Fail | Blocked | Not Run |
+| --- | ---: | ---: | ---: | ---: |
+| node step1-tests.cjs | 10 | 0 | 0 | 3 |
+| node step2-tests.cjs | 23 | 0 | 0 | 1 |
+| node step3-tests.cjs | 8 | 0 | 0 | 1 |
+| node camera-tests.cjs | 8 | 0 | 0 | 1 |
+| node destination-tests.cjs | 8 | 0 | 0 | 1 |
+| node edge-tests.cjs | 5 | 0 | 0 | 0 |
+| node integration-tests.cjs | 8 | 0 | 0 | 0 |
+| node obstacle-tests.cjs | 8 | 0 | 0 | 0 |
+| รวม | 78 | 0 | 0 | 7 |
+
+ทุกชุดจบด้วยรหัส 0 ผ่าน AT-57–AT-64 ทั้งแปดข้อ รวมการเดินไปกลางเสาและผ่านกำแพงด้วย pointer handler จริง การย่อ Canvas ระหว่างกล้องเลื่อน การเปลี่ยนทิศที่ 30/60/120/144 FPS และการเดินถึงสี่มุมพร้อมเส้นทอง
+
+รายการ Not Run เจ็ดรายการเป็น browser placeholders ของชุดเดิม ผล BT-49–BT-56 ของ Step 4.1 ยัง **Not Run** ทั้งแปดข้อ รอบนี้ตรวจผ่าน Node.js สถานะข้อเสนอในหัวข้อก่อนหน้าเป็นประวัติก่อนพัฒนา ใช้ผลในหัวข้อนี้เป็นสถานะล่าสุด
+
+พร้อมให้ผู้ใช้ตรวจตามรายการหัวข้อ 22.5 และยืนยันผลเพื่อปิด Step 4.1
+
+## 22.7 ปรับ ID ตามข้อกำหนดล่าสุด — 2026-11-20
+
+สถานะ Step 4.1 ผ่านอัตโนมัติและรอตรวจรับในเบราว์เซอร์ ชื่อในหัวข้อ 22.2 เป็นประวัติผังเดิม ตารางต่อไปนี้เป็นข้อมูลฉบับปัจจุบัน
+
+| ID เดิม | ID ปัจจุบัน | type | x | y | width | height |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| wall-west | corridor-left | wall | 700 | 250 | 80 | 450 |
+| wall-east | corridor-right | wall | 1220 | 250 | 80 | 450 |
+| wall-south-west | lower-left | wall | 400 | 1300 | 450 | 80 |
+| wall-south-east | lower-right | wall | 1150 | 1300 | 450 | 80 |
+| pillar-nw | pillar-nw | pillar | 400 | 500 | 80 | 80 |
+| pillar-sw | pillar-sw | pillar | 400 | 900 | 80 | 80 |
+| pillar-ne | pillar-ne | pillar | 1520 | 500 | 80 | 80 |
+| pillar-se | pillar-se | pillar | 1520 | 900 | 80 | 80 |
+
+สาเหตุของความไม่ตรงข้อกำหนดคือข้อมูลกำแพงใช้ชื่อจากผังฉบับแรก ส่วน AT-57 เดิมตรวจจำนวนและ ID ไม่ซ้ำ จึงยังจับชื่อที่ต่างจากข้อกำหนดล่าสุดไม่ได้ แก้ game.js เฉพาะ ID กำแพงสี่ชื่อ
+
+### หลักฐานทดสอบก่อนและหลังแก้
+
+เพิ่ม expected dataset ทั้งแปดรายการที่เขียนอิสระใน AT-57 แล้วเรียก assert.deepEqual ก่อนแก้ game.js รัน node obstacle-tests.cjs ได้ 7 Pass, 1 Fail, 0 Blocked, 0 Not Run และ exit code 1
+
+AT-57 รายงาน AssertionError [ERR_ASSERTION] พร้อมข้อความ “Obstacle dataset must match the exact specification” ความต่าง actual → expected คือ wall-west → corridor-left, wall-east → corridor-right, wall-south-west → lower-left และ wall-south-east → lower-right
+
+หลังแก้ข้อมูล AT-57 เดิมผ่าน ปรับการอ้าง ID ในข้อทดสอบช่องทางเดิน เพิ่มการยืนยันช่อง 440/300 ใน AT-59 และเพิ่ม AT-61 ให้ตรวจคำสั่งวาดทั้ง 24 ส่วนของสิ่งกีดขวางว่าอยู่หลังขอบโลกทั้งหมดและก่อนเครื่องหมาย ข้อทดสอบเดิมยังอยู่ครบ AT-08 ใช้ฉบับที่รองรับ visual obstacles จากหัวข้อ 22.6
+
+### ผล Regression ที่รันจริงหลังแก้
+
+| คำสั่ง | Exit code | Pass | Fail | Blocked | Not Run |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| node step1-tests.cjs | 0 | 10 | 0 | 0 | 3 |
+| node step2-tests.cjs | 0 | 23 | 0 | 0 | 1 |
+| node step3-tests.cjs | 0 | 8 | 0 | 0 | 1 |
+| node camera-tests.cjs | 0 | 8 | 0 | 0 | 1 |
+| node destination-tests.cjs | 0 | 8 | 0 | 0 | 1 |
+| node edge-tests.cjs | 0 | 5 | 0 | 0 | 0 |
+| node integration-tests.cjs | 0 | 8 | 0 | 0 | 0 |
+| node obstacle-tests.cjs | 0 | 8 | 0 | 0 | 0 |
+| รวม | — | 78 | 0 | 0 | 7 |
+
+ผลข้างต้นมาจาก Node.js ซึ่งรัน game.js จริงในสภาพจำลอง รายการ Not Run เจ็ดรายการเป็น browser placeholders เดิม ส่วน BT-49–BT-56 ในหัวข้อ 22.5 ยัง Not Run ทั้งแปดข้อและรอผู้ใช้ยืนยัน
+
+ภาพสิ่งกีดขวางยังเป็น visual-only นักรบเดินผ่านกำแพงและคลิกถึงกลางเสาได้ สีตัวกำแพง #514957 สีเสา #6b626f และขอบสว่างด้านในใช้รูปแบบเดิม ลำดับวาดคือพื้น → ขอบโลก → สิ่งกีดขวาง → จุดหมาย → นักรบ
+
+ความต่างของ ID ที่พบแก้แล้ว ไม่พบข้อบกพร่องเพิ่มเติมจากชุดทดสอบรอบนี้ แนะนำ GO สำหรับตรวจรับในเบราว์เซอร์ สถานะ Step 4.1 ยังรอการตรวจรับ
+
+**End of Document — MVP 1.0 GDD (Document Version 1.20)**
